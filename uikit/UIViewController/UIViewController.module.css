@@ -1,0 +1,17 @@
+.viewController {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.animatedWrapper {
+  box-sizing: border-box;
+  width: 100%;
+  will-change: opacity, transform;
+}
+
+.animatedWrapper[data-appearance-state='disappeared'] {
+  visibility: hidden;
+  opacity: 0;
+}

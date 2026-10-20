@@ -1,0 +1,63 @@
+.collectionViewLayout {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.collectionViewLayout::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.collectionViewLayout[data-scroll-direction='horizontal'] {
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.section {
+  display: grid;
+  box-sizing: border-box;
+  justify-content: start;
+  align-content: start;
+  padding: var(--ui-collection-view-inset-top) var(--ui-collection-view-inset-right)
+    var(--ui-collection-view-inset-bottom) var(--ui-collection-view-inset-left);
+}
+
+.collectionViewLayout[data-scroll-direction='vertical'] .section {
+  grid-template-columns: repeat(auto-fill, var(--ui-collection-view-item-width));
+  grid-auto-rows: var(--ui-collection-view-item-height);
+  row-gap: var(--ui-collection-view-line-spacing);
+  column-gap: var(--ui-collection-view-interitem-spacing);
+}
+
+.collectionViewLayout[data-scroll-direction='horizontal'] .section {
+  flex-shrink: 0;
+  height: 100%;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(auto-fill, var(--ui-collection-view-item-height));
+  grid-auto-columns: var(--ui-collection-view-item-width);
+  row-gap: var(--ui-collection-view-interitem-spacing);
+  column-gap: var(--ui-collection-view-line-spacing);
+}
+
+.item {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.animatedWrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  will-change: transform;
+}
