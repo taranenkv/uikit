@@ -1,5 +1,5 @@
 import { createElement } from 'react';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { UICollectionViewCell } from './UICollectionViewCell';
 
 const meta: Meta<typeof UICollectionViewCell> = {

@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 import type {
   IndexPath,
+  UICollectionViewLayoutRef,
   UICollectionViewFlowLayoutConfiguration,
   UICollectionViewInitialLayoutAttributesForAppearingItemAt,
   UICollectionViewLayoutAttributesForItemAt,
@@ -32,3 +33,12 @@ export interface UICollectionViewSelectionProps {
   allowsMultipleSelection: boolean;
   children?: ReactNode;
 }
+
+export interface UICollectionViewSelectionRef {
+  readonly indexPathsForSelectedItems: IndexPath[];
+  selectItemAt: (indexPath: IndexPath) => void;
+  deselectItemAt: (indexPath: IndexPath) => void;
+}
+
+export interface UICollectionViewRef
+  extends UICollectionViewLayoutRef, UICollectionViewSelectionRef {}

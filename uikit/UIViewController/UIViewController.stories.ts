@@ -1,12 +1,5 @@
-import {
-  createElement,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type CSSProperties,
-} from 'react';
-import type { Meta, StoryObj } from '@storybook/react';
+import { createElement, useCallback, useMemo, useState, type CSSProperties } from 'react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { UIViewController } from './UIViewController';
 import { useUIViewControllerContext } from './UIViewController.context';
 import type { UIViewControllerProps } from './UIViewController.types';
@@ -21,6 +14,17 @@ import type {
 
 const NUMBER_OF_ITEMS = 12;
 const MAXIMUM_LOG_ENTRIES = 10;
+
+const presentedStyle: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 12,
+  height: '100%',
+  background: '#ffffff',
+  color: '#1c1c1e',
+};
 
 const containerStyle: CSSProperties = {
   display: 'flex',
@@ -76,6 +80,51 @@ function ViewControllerState() {
   );
 }
 
+function PresentedViewController() {
+  const { dismiss } = useUIViewControllerContext();
+
+  return createElement(
+    'div',
+    { style: presentedStyle },
+    createElement('strong', null, 'Presented view controller'),
+    createElement('button', { type: 'button', onClick: () => dismiss(true) }, 'dismiss')
+  );
+}
+
+function PresentButton({ onLog }: { onLog: (entry: string) => void }) {
+  const { present } = useUIViewControllerContext();
+
+  return createElement(
+    'button',
+    {
+      type: 'button',
+      style: { margin: '0 16px 8px' },
+      onClick: () =>
+        present(
+          createElement(
+            UIViewController,
+            {
+              title: 'Presented',
+              style: { height: '100%' },
+              viewWillAppear: (isAnimated: boolean) =>
+                onLog(`presented.viewWillAppear(${isAnimated})`),
+              viewDidAppear: (isAnimated: boolean) =>
+                onLog(`presented.viewDidAppear(${isAnimated})`),
+              viewWillDisappear: (isAnimated: boolean) =>
+                onLog(`presented.viewWillDisappear(${isAnimated})`),
+              viewDidDisappear: (isAnimated: boolean) =>
+                onLog(`presented.viewDidDisappear(${isAnimated})`),
+            },
+            createElement(PresentedViewController)
+          ),
+          true,
+          () => onLog('present completion')
+        ),
+    },
+    'present(_:animated:completion:)'
+  );
+}
+
 function UIViewControllerStory({
   isViewVisible: isViewVisibleArg = true,
   animated = true,
@@ -83,10 +132,6 @@ function UIViewControllerStory({
 }: UIViewControllerProps) {
   const [isViewVisible, setIsViewVisible] = useState(isViewVisibleArg);
   const [log, setLog] = useState<string[]>([]);
-
-  useEffect(() => {
-    setIsViewVisible(isViewVisibleArg);
-  }, [isViewVisibleArg]);
 
   const appendLog = useCallback((entry: string) => {
     setLog((current) => [entry, ...current].slice(0, MAXIMUM_LOG_ENTRIES));
@@ -139,6 +184,7 @@ function UIViewControllerStory({
         viewDidLayoutSubviews: () => appendLog('viewDidLayoutSubviews()'),
       },
       createElement(ViewControllerState),
+      createElement(PresentButton, { onLog: appendLog }),
       createElement(UICollectionView, {
         dataSource,
         delegate,
@@ -175,8 +221,12 @@ const meta: Meta<UIViewControllerProps> = {
     viewDidDisappear: { table: { disable: true } },
     viewWillLayoutSubviews: { table: { disable: true } },
     viewDidLayoutSubviews: { table: { disable: true } },
+    modalPresentationStyle: { table: { disable: true } },
+    transitioningDelegate: { table: { disable: true } },
+    isModalInPresentation: { table: { disable: true } },
   },
-  render: (args) => createElement(UIViewControllerStory, args),
+  render: (args) =>
+    createElement(UIViewControllerStory, { ...args, key: String(args.isViewVisible) }),
 };
 
 export default meta;

@@ -1,0 +1,24 @@
+.containerView {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ui-presentation-controller-z-index, 1000);
+  overflow: hidden;
+  outline: none;
+  overscroll-behavior: contain;
+}
+
+.dimmingView {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  opacity: 0;
+  background: var(--ui-presentation-controller-dimming-background, rgba(0, 0, 0, 0.4));
+}
+
+.dimmingView[hidden] {
+  display: none;
+}
+
+.presentedView {
+  isolation: isolate;
+}

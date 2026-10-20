@@ -1,5 +1,5 @@
 import { createElement, useMemo, type CSSProperties } from 'react';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { UICollectionView } from './UICollectionView';
 import type { UICollectionViewProps } from './UICollectionView.types';
 import { UICollectionViewCell } from '../UICollectionViewCell/UICollectionViewCell';

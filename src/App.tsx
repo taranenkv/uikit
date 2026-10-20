@@ -1,5 +1,7 @@
+import { CoursesViewController } from './Courses/CoursesViewController/CoursesViewController';
+
 function App() {
-  return null;
+  return <CoursesViewController />;
 }
 
 export default App;

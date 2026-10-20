@@ -1,5 +1,5 @@
 import { createElement, useCallback, useMemo, useState } from 'react';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { UICollectionViewLayout } from './UICollectionViewLayout';
 import type {
   UICollectionViewFlowLayoutConfiguration,

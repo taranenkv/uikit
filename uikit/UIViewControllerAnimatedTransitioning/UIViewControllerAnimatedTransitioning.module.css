@@ -1,0 +1,11 @@
+.transitionView {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  transform-origin: 0 0;
+}
+
+.transitionView[data-transitioning='true'] {
+  will-change: transform, opacity, clip-path;
+}

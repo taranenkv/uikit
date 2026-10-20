@@ -1,0 +1,10 @@
+.panGestureRecognizer {
+  position: relative;
+  box-sizing: border-box;
+}
+
+.panGestureRecognizer[data-state='began'],
+.panGestureRecognizer[data-state='changed'] {
+  user-select: none;
+  -webkit-user-select: none;
+}

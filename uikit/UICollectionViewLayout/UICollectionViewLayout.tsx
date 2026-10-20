@@ -1,4 +1,14 @@
-import { forwardRef, useEffect, useMemo, useRef, type CSSProperties } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import gsap from 'gsap';
 import styles from './UICollectionViewLayout.module.css';
 import {
@@ -11,6 +21,7 @@ import { useUICollectionViewDataSourceContext } from '../UICollectionViewDataSou
 import { useOptionalUICollectionViewDelegateContext } from '../UICollectionViewDelegate/UICollectionViewDelegate.context';
 import type {
   CGAffineTransform,
+  CGRect,
   IndexPath,
   UICollectionViewFlowLayout,
   UICollectionViewFlowLayoutConfiguration,
@@ -22,6 +33,8 @@ import type {
   UICollectionViewLayoutItemSlotProps,
   UICollectionViewLayoutItemState,
   UICollectionViewLayoutProps,
+  UICollectionViewLayoutRef,
+  UICollectionViewScrollPosition,
 } from './UICollectionViewLayout.types';
 
 const DEFAULT_FLOW_LAYOUT: UICollectionViewFlowLayout = {
@@ -42,6 +55,48 @@ const IDENTITY_TRANSFORM: CGAffineTransform = {
 };
 
 const DETACHED_INDEX_PATH: IndexPath = { section: -1, item: -1 };
+
+function keyForIndexPath({ section, item }: IndexPath): string {
+  return `${section}:${item}`;
+}
+
+function createDefaultFrame(collectionViewLayout: UICollectionViewFlowLayout): CGRect {
+  return { origin: { x: 0, y: 0 }, size: collectionViewLayout.itemSize };
+}
+
+function measureFrame(element: HTMLElement, container: HTMLElement): CGRect {
+  const elementRect = element.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+
+  return {
+    origin: {
+      x: elementRect.left - containerRect.left - container.clientLeft + container.scrollLeft,
+      y: elementRect.top - containerRect.top - container.clientTop + container.scrollTop,
+    },
+    size: { width: elementRect.width, height: elementRect.height },
+  };
+}
+
+function resolveContentOffset(
+  frame: CGRect,
+  container: HTMLElement,
+  scrollPosition: UICollectionViewScrollPosition
+): ScrollToOptions {
+  switch (scrollPosition) {
+    case 'top':
+      return { top: frame.origin.y };
+    case 'centeredVertically':
+      return { top: frame.origin.y - (container.clientHeight - frame.size.height) / 2 };
+    case 'bottom':
+      return { top: frame.origin.y + frame.size.height - container.clientHeight };
+    case 'left':
+      return { left: frame.origin.x };
+    case 'centeredHorizontally':
+      return { left: frame.origin.x - (container.clientWidth - frame.size.width) / 2 };
+    case 'right':
+      return { left: frame.origin.x + frame.size.width - container.clientWidth };
+  }
+}
 
 function joinClassNames(...values: Array<string | undefined>): string {
   return values.filter(Boolean).join(' ');
@@ -67,13 +122,15 @@ function resolveFlowLayout(
 function createLayoutAttributes(
   indexPath: IndexPath,
   collectionViewLayout: UICollectionViewFlowLayout,
-  state: UICollectionViewLayoutItemState
+  state: UICollectionViewLayoutItemState,
+  frame: CGRect
 ): UICollectionViewLayoutAttributes {
   const scale = state.isHighlighted ? 0.96 : state.isSelected ? 1.04 : 1;
 
   return {
     indexPath,
     representedElementCategory: 'cell',
+    frame,
     size: collectionViewLayout.itemSize,
     alpha: 1,
     transform: { ...IDENTITY_TRANSFORM, a: scale, d: scale },
@@ -84,6 +141,8 @@ function createLayoutAttributes(
 
 function createLayoutContextValue(
   collectionViewLayout: UICollectionViewFlowLayout,
+  frameForItemAt: (indexPath: IndexPath) => CGRect,
+  registerCellForItemAt: (indexPath: IndexPath, element: HTMLElement) => () => void,
   layoutAttributesForItemAt?: UICollectionViewLayoutAttributesForItemAt,
   initialLayoutAttributesForAppearingItemAt?: UICollectionViewInitialLayoutAttributesForAppearingItemAt
 ): UICollectionViewLayoutContextValue {
@@ -91,7 +150,12 @@ function createLayoutContextValue(
     indexPath: IndexPath,
     state: UICollectionViewLayoutItemState
   ): UICollectionViewLayoutAttributes => {
-    const proposedAttributes = createLayoutAttributes(indexPath, collectionViewLayout, state);
+    const proposedAttributes = createLayoutAttributes(
+      indexPath,
+      collectionViewLayout,
+      state,
+      frameForItemAt(indexPath)
+    );
 
     return {
       ...proposedAttributes,
@@ -113,10 +177,15 @@ function createLayoutContextValue(
         ...initialLayoutAttributesForAppearingItemAt?.(indexPath, proposedAttributes),
       };
     },
+    registerCellForItemAt,
   };
 }
 
-const DEFAULT_LAYOUT_CONTEXT_VALUE = createLayoutContextValue(DEFAULT_FLOW_LAYOUT);
+const DEFAULT_LAYOUT_CONTEXT_VALUE = createLayoutContextValue(
+  DEFAULT_FLOW_LAYOUT,
+  () => createDefaultFrame(DEFAULT_FLOW_LAYOUT),
+  () => () => undefined
+);
 
 function createTweenVars(attributes: UICollectionViewLayoutAttributes) {
   return {
@@ -136,7 +205,20 @@ function UICollectionViewLayoutItemSlot({
 }: UICollectionViewLayoutItemSlotProps) {
   const indexPath = useMemo<IndexPath>(() => ({ section, item }), [section, item]);
   const delegate = useOptionalUICollectionViewDelegateContext();
+  const layoutContext = useOptionalUICollectionViewLayoutContext();
+  const registerCellForItemAt = layoutContext?.registerCellForItemAt;
   const delegateRef = useRef(delegate);
+  const elementRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const element = elementRef.current;
+
+    if (!element || !registerCellForItemAt) {
+      return undefined;
+    }
+
+    return registerCellForItemAt({ section, item }, element);
+  }, [registerCellForItemAt, section, item]);
 
   useEffect(() => {
     delegateRef.current = delegate;
@@ -154,7 +236,9 @@ function UICollectionViewLayoutItemSlot({
 
   return (
     <UICollectionViewIndexPathContext.Provider value={indexPath}>
-      <div className={styles.item}>{children}</div>
+      <div ref={elementRef} className={styles.item}>
+        {children}
+      </div>
     </UICollectionViewIndexPathContext.Provider>
   );
 }
@@ -219,68 +303,150 @@ function UICollectionViewLayoutAnimatedWrapper({
   );
 }
 
-const UICollectionViewLayoutRoot = forwardRef<HTMLDivElement, UICollectionViewLayoutProps>(
-  function UICollectionViewLayout(
-    {
-      collectionViewLayout,
+const UICollectionViewLayoutRoot = forwardRef<
+  UICollectionViewLayoutRef,
+  UICollectionViewLayoutProps
+>(function UICollectionViewLayout(
+  {
+    collectionViewLayout,
+    layoutAttributesForItemAt,
+    initialLayoutAttributesForAppearingItemAt,
+    className,
+    ...rest
+  },
+  ref
+) {
+  const { numberOfSections, numberOfItemsInSection, cellForItemAt } =
+    useUICollectionViewDataSourceContext();
+
+  const [view, setView] = useState<HTMLDivElement | null>(null);
+  const [cells] = useState(() => new Map<string, HTMLElement>());
+
+  const layout = useMemo(() => resolveFlowLayout(collectionViewLayout), [collectionViewLayout]);
+
+  const registerCellForItemAt = useCallback(
+    (indexPath: IndexPath, element: HTMLElement) => {
+      const key = keyForIndexPath(indexPath);
+
+      cells.set(key, element);
+
+      return () => {
+        if (cells.get(key) === element) {
+          cells.delete(key);
+        }
+      };
+    },
+    [cells]
+  );
+
+  const frameForItemAt = useCallback(
+    (indexPath: IndexPath) => {
+      const element = cells.get(keyForIndexPath(indexPath));
+      const container = view;
+
+      if (!element || !container) {
+        return createDefaultFrame(layout);
+      }
+
+      return measureFrame(element, container);
+    },
+    [cells, view, layout]
+  );
+
+  const contextValue = useMemo(
+    () =>
+      createLayoutContextValue(
+        layout,
+        frameForItemAt,
+        registerCellForItemAt,
+        layoutAttributesForItemAt,
+        initialLayoutAttributesForAppearingItemAt
+      ),
+    [
+      layout,
+      frameForItemAt,
+      registerCellForItemAt,
       layoutAttributesForItemAt,
       initialLayoutAttributesForAppearingItemAt,
-      className,
-      ...rest
-    },
-    ref
-  ) {
-    const { numberOfSections, numberOfItemsInSection, cellForItemAt } =
-      useUICollectionViewDataSourceContext();
+    ]
+  );
 
-    const layout = useMemo(() => resolveFlowLayout(collectionViewLayout), [collectionViewLayout]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      view,
+      cellForItemAt: (indexPath) => {
+        const element = cells.get(keyForIndexPath(indexPath));
 
-    const contextValue = useMemo(
-      () =>
-        createLayoutContextValue(
-          layout,
-          layoutAttributesForItemAt,
-          initialLayoutAttributesForAppearingItemAt
-        ),
-      [layout, layoutAttributesForItemAt, initialLayoutAttributesForAppearingItemAt]
-    );
+        if (!element) {
+          return null;
+        }
 
-    const sectionStyle = useMemo(
-      () =>
-        ({
-          '--ui-collection-view-item-width': `${layout.itemSize.width}px`,
-          '--ui-collection-view-item-height': `${layout.itemSize.height}px`,
-          '--ui-collection-view-line-spacing': `${layout.minimumLineSpacing}px`,
-          '--ui-collection-view-interitem-spacing': `${layout.minimumInteritemSpacing}px`,
-          '--ui-collection-view-inset-top': `${layout.sectionInset.top}px`,
-          '--ui-collection-view-inset-right': `${layout.sectionInset.right}px`,
-          '--ui-collection-view-inset-bottom': `${layout.sectionInset.bottom}px`,
-          '--ui-collection-view-inset-left': `${layout.sectionInset.left}px`,
-        }) as CSSProperties,
-      [layout]
-    );
+        return element.firstElementChild instanceof HTMLElement
+          ? element.firstElementChild
+          : element;
+      },
+      layoutAttributesForItemAt: (indexPath) => {
+        if (!cells.has(keyForIndexPath(indexPath))) {
+          return null;
+        }
 
-    return (
-      <UICollectionViewLayoutContext.Provider value={contextValue}>
-        <div
-          {...rest}
-          ref={ref}
-          data-scroll-direction={layout.scrollDirection}
-          className={joinClassNames(styles.collectionViewLayout, className)}>
-          {Array.from({ length: numberOfSections() }, (_, section) => (
-            <div key={section} role='group' className={styles.section} style={sectionStyle}>
-              {Array.from({ length: numberOfItemsInSection(section) }, (__, item) => (
-                <UICollectionViewLayoutItemSlot key={item} section={section} item={item}>
-                  {cellForItemAt({ section, item })}
-                </UICollectionViewLayoutItemSlot>
-              ))}
-            </div>
-          ))}
-        </div>
-      </UICollectionViewLayoutContext.Provider>
-    );
-  }
-);
+        return contextValue.layoutAttributesForItemAt(indexPath, {
+          isSelected: false,
+          isHighlighted: false,
+        });
+      },
+      scrollToItemAt: (indexPath, scrollPosition, animated) => {
+        const container = view;
+
+        if (!container || !cells.has(keyForIndexPath(indexPath))) {
+          return;
+        }
+
+        container.scrollTo({
+          ...resolveContentOffset(frameForItemAt(indexPath), container, scrollPosition),
+          behavior: animated ? 'smooth' : 'auto',
+        });
+      },
+    }),
+    [view, cells, contextValue, frameForItemAt]
+  );
+
+  const sectionStyle = useMemo(
+    () =>
+      ({
+        '--ui-collection-view-item-width': `${layout.itemSize.width}px`,
+        '--ui-collection-view-item-height': `${layout.itemSize.height}px`,
+        '--ui-collection-view-line-spacing': `${layout.minimumLineSpacing}px`,
+        '--ui-collection-view-interitem-spacing': `${layout.minimumInteritemSpacing}px`,
+        '--ui-collection-view-inset-top': `${layout.sectionInset.top}px`,
+        '--ui-collection-view-inset-right': `${layout.sectionInset.right}px`,
+        '--ui-collection-view-inset-bottom': `${layout.sectionInset.bottom}px`,
+        '--ui-collection-view-inset-left': `${layout.sectionInset.left}px`,
+      }) as CSSProperties,
+    [layout]
+  );
+
+  return (
+    <UICollectionViewLayoutContext.Provider value={contextValue}>
+      <div
+        {...rest}
+        ref={setView}
+        data-scroll-direction={layout.scrollDirection}
+        className={joinClassNames(styles.collectionViewLayout, className)}>
+        {Array.from({ length: numberOfSections() }, (_, section) => (
+          <div key={section} role='group' className={styles.section} style={sectionStyle}>
+            {Array.from({ length: numberOfItemsInSection(section) }, (__, item) => (
+              <UICollectionViewLayoutItemSlot key={item} section={section} item={item}>
+                {cellForItemAt({ section, item })}
+              </UICollectionViewLayoutItemSlot>
+            ))}
+          </div>
+        ))}
+      </div>
+    </UICollectionViewLayoutContext.Provider>
+  );
+});
 
 UICollectionViewLayoutRoot.displayName = 'UICollectionViewLayout';
 

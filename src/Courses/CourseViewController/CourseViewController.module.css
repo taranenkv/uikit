@@ -1,0 +1,209 @@
+.courseViewController {
+  height: 100%;
+  background: #0b0a1a;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+}
+
+.panGestureRecognizer {
+  height: 100%;
+}
+
+.scrollView {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scrollView::-webkit-scrollbar {
+  display: none;
+}
+
+.header {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: min(520px, 62vh);
+  overflow: hidden;
+  background: linear-gradient(
+    160deg,
+    var(--course-color-1),
+    var(--course-color-2) 55%,
+    var(--course-color-3)
+  );
+}
+
+.headerArtwork {
+  flex: 1;
+  min-height: 0;
+  padding-top: env(safe-area-inset-top);
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 24px 28px;
+}
+
+.headerTitle {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.headerCaption {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 20px calc(48px + env(safe-area-inset-bottom));
+}
+
+.description {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.author {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sectionCaption {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.sectionTitle {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.progressValue {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--course-color-1), var(--course-color-2));
+}
+
+.closeButton {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 16px);
+  right: 16px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.artwork {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.artworkOrb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(0.5px);
+}
+
+.artworkOrb:nth-child(1) {
+  top: 14%;
+  left: 52%;
+  width: 46%;
+  aspect-ratio: 1;
+  background: radial-gradient(
+    circle at 35% 35%,
+    #ffffff,
+    var(--course-color-2) 45%,
+    transparent 72%
+  );
+  opacity: 0.9;
+}
+
+.artworkOrb:nth-child(2) {
+  top: 34%;
+  left: 12%;
+  width: 30%;
+  aspect-ratio: 1;
+  background: radial-gradient(circle at 40% 40%, var(--course-color-1), transparent 70%);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+.artworkOrb:nth-child(3) {
+  top: 8%;
+  left: 18%;
+  width: 14%;
+  aspect-ratio: 1;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.artworkRing {
+  position: absolute;
+  top: 20%;
+  left: 40%;
+  width: 56%;
+  aspect-ratio: 1;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-radius: 50%;
+}

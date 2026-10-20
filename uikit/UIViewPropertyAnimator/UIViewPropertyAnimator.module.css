@@ -1,0 +1,36 @@
+.stage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 420px;
+}
+
+.track {
+  position: relative;
+  height: 96px;
+  border-radius: 16px;
+  background: #f2f2f7;
+}
+
+.box {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #7b2ff7, #f107a3);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.state {
+  font:
+    12px/1.5 ui-monospace,
+    monospace;
+  color: #3a3a3c;
+}

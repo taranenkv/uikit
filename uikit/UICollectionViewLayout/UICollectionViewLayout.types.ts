@@ -5,9 +5,19 @@ export interface IndexPath {
   item: number;
 }
 
+export interface CGPoint {
+  x: number;
+  y: number;
+}
+
 export interface CGSize {
   width: number;
   height: number;
+}
+
+export interface CGRect {
+  origin: CGPoint;
+  size: CGSize;
 }
 
 export interface UIEdgeInsets {
@@ -28,6 +38,9 @@ export interface CGAffineTransform {
 
 export type UICollectionViewScrollDirection = 'vertical' | 'horizontal';
 
+export type UICollectionViewScrollPosition =
+  'top' | 'centeredVertically' | 'bottom' | 'left' | 'centeredHorizontally' | 'right';
+
 export interface UICollectionViewFlowLayout {
   scrollDirection: UICollectionViewScrollDirection;
   itemSize: CGSize;
@@ -47,6 +60,7 @@ export type UICollectionViewLayoutElementCategory = 'cell';
 export interface UICollectionViewLayoutAttributes {
   indexPath: IndexPath;
   representedElementCategory: UICollectionViewLayoutElementCategory;
+  frame: CGRect;
   size: CGSize;
   alpha: number;
   transform: CGAffineTransform;
@@ -55,7 +69,7 @@ export interface UICollectionViewLayoutAttributes {
 }
 
 export type UICollectionViewLayoutAttributesOverrides = Partial<
-  Omit<UICollectionViewLayoutAttributes, 'indexPath' | 'representedElementCategory'>
+  Omit<UICollectionViewLayoutAttributes, 'indexPath' | 'representedElementCategory' | 'frame'>
 >;
 
 export interface UICollectionViewLayoutItemState {
@@ -83,6 +97,18 @@ export interface UICollectionViewLayoutContextValue {
   initialLayoutAttributesForAppearingItemAt: (
     indexPath: IndexPath
   ) => UICollectionViewLayoutAttributes;
+  registerCellForItemAt: (indexPath: IndexPath, element: HTMLElement) => () => void;
+}
+
+export interface UICollectionViewLayoutRef {
+  readonly view: HTMLDivElement | null;
+  cellForItemAt: (indexPath: IndexPath) => HTMLElement | null;
+  layoutAttributesForItemAt: (indexPath: IndexPath) => UICollectionViewLayoutAttributes | null;
+  scrollToItemAt: (
+    indexPath: IndexPath,
+    scrollPosition: UICollectionViewScrollPosition,
+    animated: boolean
+  ) => void;
 }
 
 export interface UICollectionViewLayoutProps extends Omit<

@@ -1,10 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react';
-import type { IndexPath } from '../UICollectionViewLayout/UICollectionViewLayout.types';
+import type { CGPoint, IndexPath } from '../UICollectionViewLayout/UICollectionViewLayout.types';
 
-export interface CGPoint {
-  x: number;
-  y: number;
-}
+export type { CGPoint };
 
 export interface UICollectionViewDelegate {
   shouldHighlightItemAt?: (indexPath: IndexPath) => boolean;

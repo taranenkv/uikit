@@ -1,5 +1,5 @@
 import { createElement, useCallback, useMemo, useState, type CSSProperties } from 'react';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { UICollectionViewDelegate } from './UICollectionViewDelegate';
 import type {
   UICollectionViewDelegate as UICollectionViewDelegateProtocol,

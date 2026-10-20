@@ -1,0 +1,130 @@
+.coursesViewController {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #0b0a1a;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.navigationBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top) + 20px) 24px 8px;
+}
+
+.largeTitle {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f107a3, #7b2ff7);
+}
+
+.collectionView {
+  flex: 1;
+  min-height: 0;
+}
+
+.cell {
+  --ui-collection-view-cell-background: transparent;
+  --ui-collection-view-cell-selected-background: transparent;
+  --ui-collection-view-cell-border-radius: 30px;
+  --ui-collection-view-cell-focus-color: #ffffff;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 30px;
+  background: linear-gradient(
+    160deg,
+    var(--course-color-1),
+    var(--course-color-2) 55%,
+    var(--course-color-3)
+  );
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+  text-align: left;
+}
+
+.cardArtwork {
+  flex: 1;
+  min-height: 0;
+}
+
+.cardText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 20px 22px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.cardCaption {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.tabBar {
+  position: absolute;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  left: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: 64px;
+  border-radius: 24px;
+  background: rgba(30, 26, 56, 0.72);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.tabBarItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.tabBarItem[aria-current='page'] {
+  color: #ffffff;
+}
+
+.tabBarIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: currentColor;
+  opacity: 0.85;
+}
