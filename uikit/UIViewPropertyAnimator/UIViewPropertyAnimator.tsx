@@ -4,6 +4,8 @@ import type { CGPoint } from '../UICollectionViewLayout/UICollectionViewLayout.t
 import type {
   CGVector,
   UICubicControlPoints,
+  UISpringPosition,
+  UISpringTimingParametersConfiguration,
   UITimingCurveProvider,
   UITimingCurveType,
   UITimingFunction,
@@ -22,6 +24,13 @@ const SETTLING_LOGARITHM = Math.log(1000);
 const CRITICALLY_DAMPED_OMEGA = 9.23;
 const MINIMUM_DAMPING_RATIO = 0.05;
 const MINIMUM_NORMALIZED_DURATION = 0.0001;
+const SPRING_SETTLING_THRESHOLD = 0.002;
+const SPRING_SETTLING_STEP = 1 / 240;
+const SPRING_SETTLED_WINDOW = 0.5;
+const MAXIMUM_SPRING_SETTLING_DURATION = 10;
+const MAXIMUM_BOUNCE = 0.99;
+const MINIMUM_PERCEPTUAL_DURATION = 0.01;
+const ZERO_VECTOR: CGVector = { dx: 0, dy: 0 };
 
 const ANIMATION_CURVE_CONTROL_POINTS: Record<UIViewAnimationCurve, UICubicControlPoints> = {
   easeInOut: { controlPoint1: { x: 0.42, y: 0 }, controlPoint2: { x: 0.58, y: 1 } },
@@ -149,6 +158,56 @@ function createSpringTimingFunction(
   };
 }
 
+function createSpringPosition(
+  angularFrequency: number,
+  dampingRatio: number,
+  initialVelocity: number
+): UISpringPosition {
+  const omega = angularFrequency;
+  const zeta = Math.max(dampingRatio, 0);
+
+  if (Math.abs(zeta - 1) < 1e-6) {
+    return (time) => 1 - Math.exp(-omega * time) * (1 + (omega - initialVelocity) * time);
+  }
+
+  if (zeta < 1) {
+    const dampedOmega = omega * Math.sqrt(1 - zeta * zeta);
+
+    return (time) =>
+      1 -
+      Math.exp(-zeta * omega * time) *
+        (Math.cos(dampedOmega * time) +
+          ((zeta * omega - initialVelocity) / dampedOmega) * Math.sin(dampedOmega * time));
+  }
+
+  const root = omega * Math.sqrt(zeta * zeta - 1);
+  const fastRate = -zeta * omega + root;
+  const slowRate = -zeta * omega - root;
+  const fastCoefficient = (-initialVelocity - slowRate) / (fastRate - slowRate);
+  const slowCoefficient = 1 - fastCoefficient;
+
+  return (time) =>
+    1 - (fastCoefficient * Math.exp(fastRate * time) + slowCoefficient * Math.exp(slowRate * time));
+}
+
+function computeSettlingDuration(position: UISpringPosition): number {
+  let lastUnsettledTime = 0;
+
+  for (
+    let time = SPRING_SETTLING_STEP;
+    time <= MAXIMUM_SPRING_SETTLING_DURATION;
+    time += SPRING_SETTLING_STEP
+  ) {
+    if (Math.abs(1 - position(time)) > SPRING_SETTLING_THRESHOLD) {
+      lastUnsettledTime = time;
+    } else if (time - lastUnsettledTime > SPRING_SETTLED_WINDOW) {
+      break;
+    }
+  }
+
+  return lastUnsettledTime + SPRING_SETTLING_STEP;
+}
+
 export class UICubicTimingParameters implements UITimingCurveProvider {
   readonly timingCurveType: UITimingCurveType;
   readonly animationCurve: UIViewAnimationCurve;
@@ -186,13 +245,78 @@ export class UISpringTimingParameters implements UITimingCurveProvider {
   readonly timingCurveType: UITimingCurveType = 'spring';
   readonly dampingRatio: number;
   readonly initialVelocity: CGVector;
+  readonly mass: number | null;
+  readonly stiffness: number | null;
+  readonly damping: number | null;
+  readonly settlingDuration: number | undefined;
 
-  constructor(dampingRatio = 1, initialVelocity: CGVector = { dx: 0, dy: 0 }) {
-    this.dampingRatio = dampingRatio;
-    this.initialVelocity = initialVelocity;
+  private readonly springPosition: UISpringPosition | null;
+
+  constructor(dampingRatio?: number, initialVelocity?: CGVector);
+  constructor(configuration: UISpringTimingParametersConfiguration);
+  constructor(
+    dampingRatioOrConfiguration: number | UISpringTimingParametersConfiguration = 1,
+    initialVelocity: CGVector = ZERO_VECTOR
+  ) {
+    if (typeof dampingRatioOrConfiguration === 'number') {
+      this.dampingRatio = dampingRatioOrConfiguration;
+      this.initialVelocity = initialVelocity;
+      this.mass = null;
+      this.stiffness = null;
+      this.damping = null;
+      this.settlingDuration = undefined;
+      this.springPosition = null;
+      return;
+    }
+
+    const configuration = dampingRatioOrConfiguration;
+    const velocity = configuration.initialVelocity ?? ZERO_VECTOR;
+
+    if ('stiffness' in configuration) {
+      this.mass = configuration.mass;
+      this.stiffness = configuration.stiffness;
+      this.damping = configuration.damping;
+    } else {
+      const bounce = clamp(configuration.bounce ?? 0, -MAXIMUM_BOUNCE, MAXIMUM_BOUNCE);
+      const angularFrequency =
+        (2 * Math.PI) / Math.max(configuration.duration, MINIMUM_PERCEPTUAL_DURATION);
+      const dampingRatio = bounce >= 0 ? 1 - bounce : 1 / (1 + bounce);
+
+      this.mass = 1;
+      this.stiffness = angularFrequency * angularFrequency;
+      this.damping = 2 * dampingRatio * angularFrequency;
+    }
+
+    const angularFrequency = Math.sqrt(this.stiffness / this.mass);
+
+    this.dampingRatio = this.damping / (2 * Math.sqrt(this.stiffness * this.mass));
+    this.initialVelocity = velocity;
+    this.springPosition = createSpringPosition(
+      angularFrequency,
+      this.dampingRatio,
+      Math.hypot(velocity.dx, velocity.dy)
+    );
+    this.settlingDuration = computeSettlingDuration(this.springPosition);
   }
 
   makeTimingFunction(duration: number): UITimingFunction {
+    const springPosition = this.springPosition;
+    const settlingDuration = this.settlingDuration;
+
+    if (springPosition && settlingDuration !== undefined) {
+      return (progress) => {
+        if (progress <= 0) {
+          return 0;
+        }
+
+        if (progress >= 1) {
+          return 1;
+        }
+
+        return springPosition(progress * settlingDuration);
+      };
+    }
+
     const velocity = Math.hypot(this.initialVelocity.dx, this.initialVelocity.dy);
 
     return createSpringTimingFunction(this.dampingRatio, velocity * duration);
@@ -217,7 +341,7 @@ export class UIViewPropertyAnimator {
     timingParameters: UITimingCurveProvider = new UICubicTimingParameters('easeInOut'),
     animations?: UIViewPropertyAnimatorAnimationsBlock
   ) {
-    this.duration = Math.max(duration, 0);
+    this.duration = Math.max(timingParameters.settlingDuration ?? duration, 0);
     this.timingParameters = timingParameters;
     this.timeline = UIViewPropertyAnimator.makeTimeline();
 
@@ -400,7 +524,11 @@ export class UIViewPropertyAnimator {
     const from = this.timeline.progress();
     const to = this.reversed ? 0 : 1;
     const distance = Math.abs(to - from);
-    const duration = this.duration * distance * Math.max(durationFactor, 0);
+    const factor = Math.max(durationFactor, 0);
+    const duration =
+      timingParameters.settlingDuration !== undefined
+        ? timingParameters.settlingDuration * factor
+        : this.duration * distance * factor;
 
     if (distance === 0 || duration === 0) {
       this.timeline.progress(to);

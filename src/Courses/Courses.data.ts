@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
 
+export const COURSE_CARD_ASPECT_RATIO = 1.15;
+
 export interface CourseSection {
   id: string;
   title: string;

@@ -1,6 +1,5 @@
 import gsap from 'gsap';
 import { UICrossDissolveAnimatedTransitioning } from '../../../uikit/UIViewControllerAnimatedTransitioning/UIViewControllerAnimatedTransitioning';
-import { UIPercentDrivenInteractiveTransition } from '../../../uikit/UIPercentDrivenInteractiveTransition/UIPercentDrivenInteractiveTransition';
 import {
   UISpringTimingParameters,
   UIViewPropertyAnimator,
@@ -18,14 +17,16 @@ import type {
   CourseZoomTransitionSource,
 } from './CourseZoomTransition.types';
 
-const ZOOM_DURATION = 0.7;
-const ZOOM_DAMPING_RATIO = 0.86;
-const CONTENT_APPEARANCE_DELAY_FACTOR = 0.35;
-const CONTENT_DISAPPEARANCE_DURATION_FACTOR = 0.3;
+const ZOOM_SPRING = new UISpringTimingParameters({ duration: 0.55, bounce: 0 });
+const CONTENT_APPEARANCE_DELAY_FACTOR = 0.12;
+const CONTENT_APPEARANCE_DURATION_FACTOR = 0.6;
+const CONTENT_DISAPPEARANCE_DURATION_FACTOR = 0.2;
 const CONTENT_OFFSET = 24;
 
 export const COURSE_TRANSITION_CONTENT_ATTRIBUTE = 'data-course-transition-content';
 export const COURSE_TRANSITION_SCROLL_VIEW_ATTRIBUTE = 'data-course-transition-scroll-view';
+export const COURSE_TRANSITION_INTERACTIVE_VIEW_ATTRIBUTE =
+  'data-course-transition-interactive-view';
 
 const MATCHED_ELEMENTS: CourseZoomMatchedElement[] = [
   { element: 'artwork', scaleReference: 'width' },
@@ -73,7 +74,40 @@ function makeZoomGeometry(
 }
 
 function fontSizeOf(element: Element): number {
-  return parseFloat(getComputedStyle(element).fontSize) || 1;
+  let textElement = element;
+
+  while (textElement.firstElementChild !== null) {
+    textElement = textElement.firstElementChild;
+  }
+
+  return parseFloat(getComputedStyle(textElement).fontSize) || 1;
+}
+
+function measureWithoutAncestorTransforms<T>(
+  element: HTMLElement,
+  root: Element | null,
+  measure: () => T
+): T {
+  const resetAncestors: Array<{ ancestor: HTMLElement; transform: string }> = [];
+
+  for (
+    let ancestor = element.parentElement;
+    ancestor !== null && ancestor !== root;
+    ancestor = ancestor.parentElement
+  ) {
+    if (getComputedStyle(ancestor).transform !== 'none') {
+      resetAncestors.push({ ancestor, transform: ancestor.style.transform });
+      ancestor.style.transform = 'none';
+    }
+  }
+
+  try {
+    return measure();
+  } finally {
+    resetAncestors.forEach(({ ancestor, transform }) => {
+      ancestor.style.transform = transform;
+    });
+  }
 }
 
 export class CourseZoomAnimatedTransitioning implements UIViewControllerAnimatedTransitioning {
@@ -91,7 +125,7 @@ export class CourseZoomAnimatedTransitioning implements UIViewControllerAnimated
   }
 
   transitionDuration(transitionContext: UIViewControllerContextTransitioning | null): number {
-    return transitionContext?.isAnimated === false ? 0 : ZOOM_DURATION;
+    return transitionContext?.isAnimated === false ? 0 : (ZOOM_SPRING.settlingDuration ?? 0);
   }
 
   interruptibleAnimator(
@@ -134,6 +168,20 @@ export class CourseZoomAnimatedTransitioning implements UIViewControllerAnimated
       return this.fallback.interruptibleAnimator(transitionContext);
     }
 
+    const interactiveView = presentedView.querySelector<HTMLElement>(
+      `[${COURSE_TRANSITION_INTERACTIVE_VIEW_ATTRIBUTE}]`
+    );
+    const interactiveScale = interactiveView
+      ? Number(gsap.getProperty(interactiveView, 'scale'))
+      : 1;
+    const interactiveCornerRadius = interactiveView
+      ? parseFloat(String(gsap.getProperty(interactiveView, 'borderRadius'))) || 0
+      : 0;
+
+    if (interactiveView) {
+      gsap.set(interactiveView, { scale: 1, borderRadius: 0 });
+    }
+
     gsap.set(
       [
         presentedView,
@@ -147,8 +195,11 @@ export class CourseZoomAnimatedTransitioning implements UIViewControllerAnimated
       { clearProps: 'transform,clipPath' }
     );
 
+    const sourceRoot = transitionContext.viewControllerForKey(sourceKey)?.view ?? null;
+    const measureSource = <T,>(measure: () => T): T =>
+      measureWithoutAncestorTransforms(sourceCard, sourceRoot, measure);
     const presentedFrame = transitionContext.frameInContainerView(presentedView);
-    const sourceFrame = transitionContext.frameInContainerView(sourceCard);
+    const sourceFrame = measureSource(() => transitionContext.frameInContainerView(sourceCard));
     const destinationFrame = transitionContext.frameInContainerView(destinationCard);
     const geometry = makeZoomGeometry(
       presentedFrame,
@@ -181,7 +232,9 @@ export class CourseZoomAnimatedTransitioning implements UIViewControllerAnimated
         return [];
       }
 
-      const sourceElementFrame = transitionContext.frameInContainerView(source);
+      const sourceElementFrame = measureSource(() =>
+        transitionContext.frameInContainerView(source)
+      );
       const destinationElementFrame = transitionContext.frameInContainerView(destination);
       const startX =
         (sourceElementFrame.origin.x - sourceFrame.origin.x) / geometry.scale +
@@ -212,14 +265,26 @@ export class CourseZoomAnimatedTransitioning implements UIViewControllerAnimated
     const contentViews = Array.from(
       presentedView.querySelectorAll<HTMLElement>(`[${COURSE_TRANSITION_CONTENT_ATTRIBUTE}]`)
     );
-    const animatedViews = [presentedView, ...matchedViews.map(({ view }) => view), ...contentViews];
+    const animatedViews = [
+      presentedView,
+      ...matchedViews.map(({ view }) => view),
+      ...contentViews,
+      ...(interactiveView ? [interactiveView] : []),
+    ];
     const identity: gsap.TweenVars = { x: 0, y: 0, scale: 1, transformOrigin: '0px 0px' };
     const previousSourceVisibility = sourceCard.style.visibility;
 
     const propertyAnimator = new UIViewPropertyAnimator(
       this.transitionDuration(transitionContext),
-      new UISpringTimingParameters(ZOOM_DAMPING_RATIO)
+      ZOOM_SPRING
     );
+
+    if (interactiveView) {
+      gsap.set(interactiveView, {
+        scale: interactiveScale,
+        borderRadius: interactiveCornerRadius,
+      });
+    }
 
     sourceCard.style.visibility = 'hidden';
 
@@ -238,6 +303,14 @@ export class CourseZoomAnimatedTransitioning implements UIViewControllerAnimated
         );
       });
 
+      if (!isPresenting && interactiveView && interactiveScale !== 1) {
+        animations.fromTo(
+          interactiveView,
+          { scale: interactiveScale, borderRadius: interactiveCornerRadius },
+          { scale: 1, borderRadius: 0 }
+        );
+      }
+
       if (!isPresenting && contentViews.length > 0) {
         animations.fromTo(
           contentViews,
@@ -252,7 +325,7 @@ export class CourseZoomAnimatedTransitioning implements UIViewControllerAnimated
         animations.fromTo(
           contentViews,
           { autoAlpha: 0, y: CONTENT_OFFSET },
-          { autoAlpha: 1, y: 0 }
+          { autoAlpha: 1, y: 0, duration: CONTENT_APPEARANCE_DURATION_FACTOR }
         );
       }, CONTENT_APPEARANCE_DELAY_FACTOR);
     }
@@ -265,7 +338,9 @@ export class CourseZoomAnimatedTransitioning implements UIViewControllerAnimated
       sourceCard.style.visibility = previousSourceVisibility;
 
       if (isPresentedViewVisible) {
-        gsap.set(animatedViews, { clearProps: 'transform,clipPath,opacity,visibility' });
+        gsap.set(animatedViews, {
+          clearProps: 'transform,clipPath,opacity,visibility,borderRadius',
+        });
       }
 
       transitionContext.completeTransition(
@@ -278,15 +353,8 @@ export class CourseZoomAnimatedTransitioning implements UIViewControllerAnimated
 }
 
 export class CourseZoomTransition implements UIViewControllerTransitioningDelegate {
-  readonly interactionController = new UIPercentDrivenInteractiveTransition();
-
   private source: CourseZoomTransitionSource | null = null;
-  private interacting = false;
   private collectionViewProvider: CourseZoomCollectionViewProvider = () => null;
-
-  get isInteracting(): boolean {
-    return this.interacting;
-  }
 
   attachCollectionView(collectionViewProvider: CourseZoomCollectionViewProvider): void {
     this.collectionViewProvider = collectionViewProvider;
@@ -294,14 +362,6 @@ export class CourseZoomTransition implements UIViewControllerTransitioningDelega
 
   prepare(source: CourseZoomTransitionSource): void {
     this.source = source;
-  }
-
-  beginInteractiveDismissal(): void {
-    this.interacting = true;
-  }
-
-  endInteractiveDismissal(): void {
-    this.interacting = false;
   }
 
   animationControllerForPresented(): UIViewControllerAnimatedTransitioning | null {
@@ -316,10 +376,6 @@ export class CourseZoomTransition implements UIViewControllerTransitioningDelega
     this.revealSourceItem();
 
     return new CourseZoomAnimatedTransitioning(false, this.source.course.id);
-  }
-
-  interactionControllerForDismissal(): UIPercentDrivenInteractiveTransition | null {
-    return this.interacting ? this.interactionController : null;
   }
 
   presentationControllerForPresented(): UIPresentationControllerConfiguration {

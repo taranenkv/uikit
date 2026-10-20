@@ -17,8 +17,27 @@ export type UITimingFunction = (progress: number) => number;
 
 export interface UITimingCurveProvider {
   readonly timingCurveType: UITimingCurveType;
+  readonly settlingDuration?: number;
   makeTimingFunction: (duration: number) => UITimingFunction;
 }
+
+export interface UISpringTimingParametersPerceptualConfiguration {
+  duration: number;
+  bounce?: number;
+  initialVelocity?: CGVector;
+}
+
+export interface UISpringTimingParametersPhysicalConfiguration {
+  mass: number;
+  stiffness: number;
+  damping: number;
+  initialVelocity?: CGVector;
+}
+
+export type UISpringTimingParametersConfiguration =
+  UISpringTimingParametersPerceptualConfiguration | UISpringTimingParametersPhysicalConfiguration;
+
+export type UISpringPosition = (time: number) => number;
 
 export interface UICubicControlPoints {
   controlPoint1: CGPoint;

@@ -14,12 +14,12 @@ import {
   CourseZoomTransition,
   courseTransitionIdentifier,
 } from '../CourseZoomTransition/CourseZoomTransition';
-import { courseColorStyle, courses, type Course } from '../Courses.data';
+import { COURSE_CARD_ASPECT_RATIO, courseColorStyle, courses, type Course } from '../Courses.data';
 import styles from './CoursesViewController.module.css';
 
 const HORIZONTAL_INSET = 20;
 const MAXIMUM_CARD_WIDTH = 440;
-const CARD_HEIGHT = 400;
+const CELL_CONTENT_INSET = 8;
 const TAB_BAR_CLEARANCE = 112;
 const TAB_BAR_ITEMS = ['Learn Now', 'Explore', 'Notifications', 'Library'];
 
@@ -122,12 +122,15 @@ function CoursesContent({ transition }: CoursesContentProps) {
     transition.attachCollectionView(() => collectionViewRef.current);
   }, [transition]);
 
-  const collectionViewLayout = useMemo<UICollectionViewFlowLayoutConfiguration>(
-    () => ({
+  const collectionViewLayout = useMemo<UICollectionViewFlowLayoutConfiguration>(() => {
+    const itemWidth = Math.min(screenWidth - HORIZONTAL_INSET * 2, MAXIMUM_CARD_WIDTH);
+    const cardWidth = itemWidth - CELL_CONTENT_INSET * 2;
+
+    return {
       scrollDirection: 'vertical',
       itemSize: {
-        width: Math.min(screenWidth - HORIZONTAL_INSET * 2, MAXIMUM_CARD_WIDTH),
-        height: CARD_HEIGHT,
+        width: itemWidth,
+        height: Math.round(cardWidth * COURSE_CARD_ASPECT_RATIO + CELL_CONTENT_INSET * 2),
       },
       minimumLineSpacing: 20,
       minimumInteritemSpacing: 20,
@@ -137,9 +140,8 @@ function CoursesContent({ transition }: CoursesContentProps) {
         bottom: TAB_BAR_CLEARANCE,
         right: HORIZONTAL_INSET,
       },
-    }),
-    [screenWidth]
-  );
+    };
+  }, [screenWidth]);
 
   const dataSource = useMemo<UICollectionViewDataSource>(
     () => ({
@@ -156,7 +158,7 @@ function CoursesContent({ transition }: CoursesContentProps) {
 
         collectionViewRef.current?.deselectItemAt(indexPath);
         transition.prepare({ course, indexPath });
-        present(<CourseViewController course={course} transition={transition} />, true);
+        present(<CourseViewController course={course} />, true);
       },
     }),
     [present, transition]

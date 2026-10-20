@@ -10,8 +10,9 @@ import styles from './UIViewPropertyAnimator.module.css';
 
 interface UIViewPropertyAnimatorStoryArgs {
   duration: number;
-  timingCurve: 'spring' | UIViewAnimationCurve;
+  timingCurve: 'spring' | 'springDurationBounce' | UIViewAnimationCurve;
   dampingRatio: number;
+  bounce: number;
 }
 
 const DISTANCE = 260;
@@ -20,6 +21,7 @@ function UIViewPropertyAnimatorStory({
   duration,
   timingCurve,
   dampingRatio,
+  bounce,
 }: UIViewPropertyAnimatorStoryArgs) {
   const [box, setBox] = useState<HTMLDivElement | null>(null);
   const [status, setStatus] = useState('inactive');
@@ -30,9 +32,11 @@ function UIViewPropertyAnimatorStory({
     }
 
     const timingParameters =
-      timingCurve === 'spring'
-        ? new UISpringTimingParameters(dampingRatio)
-        : new UICubicTimingParameters(timingCurve);
+      timingCurve === 'springDurationBounce'
+        ? new UISpringTimingParameters({ duration, bounce })
+        : timingCurve === 'spring'
+          ? new UISpringTimingParameters(dampingRatio)
+          : new UICubicTimingParameters(timingCurve);
     const animator = new UIViewPropertyAnimator(duration, timingParameters, (animations) => {
       animations.fromTo(box, { x: 0, rotate: 0 }, { x: DISTANCE, rotate: 180 });
     });
@@ -40,7 +44,7 @@ function UIViewPropertyAnimatorStory({
     animator.addCompletion((finalPosition) => setStatus(`completed at ${finalPosition}`));
 
     return animator;
-  }, [box, duration, timingCurve, dampingRatio]);
+  }, [box, duration, timingCurve, dampingRatio, bounce]);
 
   useEffect(
     () => () => {
@@ -114,13 +118,14 @@ function UIViewPropertyAnimatorStory({
 const meta: Meta<UIViewPropertyAnimatorStoryArgs> = {
   title: 'UIKit/UIViewPropertyAnimator',
   parameters: { layout: 'padded' },
-  args: { duration: 0.8, timingCurve: 'spring', dampingRatio: 0.6 },
+  args: { duration: 0.8, timingCurve: 'spring', dampingRatio: 0.6, bounce: 0 },
   argTypes: {
     duration: { control: { type: 'range', min: 0.1, max: 3, step: 0.1 } },
     timingCurve: {
       control: 'select',
-      options: ['spring', 'easeInOut', 'easeIn', 'easeOut', 'linear'],
+      options: ['spring', 'springDurationBounce', 'easeInOut', 'easeIn', 'easeOut', 'linear'],
     },
+    bounce: { control: { type: 'range', min: -0.5, max: 0.5, step: 0.05 } },
     dampingRatio: { control: { type: 'range', min: 0.1, max: 1, step: 0.05 } },
   },
   render: (args) => createElement(UIViewPropertyAnimatorStory, args),
@@ -138,4 +143,8 @@ export const EaseInOut: Story = {
 
 export const CriticallyDamped: Story = {
   args: { dampingRatio: 1 },
+};
+
+export const DurationAndBounce: Story = {
+  args: { timingCurve: 'springDurationBounce', duration: 0.55, bounce: 0 },
 };

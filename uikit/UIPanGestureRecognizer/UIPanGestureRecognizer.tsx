@@ -164,20 +164,51 @@ const UIPanGestureRecognizerRoot = forwardRef<HTMLDivElement, UIPanGestureRecogn
       handlersRef.current.action?.(gestureRecognizer);
     };
 
-    const appendSample = (event: PointerEvent<HTMLDivElement>) => {
+    const appendSample = (point: CGPoint, timestamp: number) => {
       const tracking = trackingRef.current;
 
       if (!tracking) {
         return;
       }
 
-      const timestamp = event.timeStamp;
-
-      tracking.samples.push({ point: { x: event.clientX, y: event.clientY }, timestamp });
+      tracking.samples.push({ point, timestamp });
       tracking.samples = tracking.samples.filter(
         (sample) => timestamp - sample.timestamp <= VELOCITY_SAMPLE_WINDOW
       );
     };
+
+    const recognize = (recognitionDistance: number): UIGestureRecognizerState => {
+      if (stateRef.current !== 'possible') {
+        return stateRef.current;
+      }
+
+      const translation = gestureRecognizer.translation();
+      const distance = Math.hypot(translation.x, translation.y);
+
+      if (distance === 0 || distance < recognitionDistance) {
+        return stateRef.current;
+      }
+
+      const shouldBegin =
+        handlersRef.current.delegate?.gestureRecognizerShouldBegin?.(gestureRecognizer) ?? true;
+
+      transition(shouldBegin ? 'began' : 'failed');
+
+      return stateRef.current;
+    };
+
+    const recognizeTouchRef = useRef<(point: CGPoint, timestamp: number) => void>(() => undefined);
+
+    useLayoutEffect(() => {
+      recognizeTouchRef.current = (point, timestamp) => {
+        if (trackingRef.current === null) {
+          return;
+        }
+
+        appendSample(point, timestamp);
+        recognize(0);
+      };
+    });
 
     const reset = () => {
       trackingRef.current = null;
@@ -193,7 +224,12 @@ const UIPanGestureRecognizerRoot = forwardRef<HTMLDivElement, UIPanGestureRecogn
       }
 
       if (isActiveState(stateRef.current)) {
-        shouldCancelClickRef.current = next === 'ended' && cancelsTouchesInView;
+        const translation = gestureRecognizer.translation();
+
+        shouldCancelClickRef.current =
+          next === 'ended' &&
+          cancelsTouchesInView &&
+          Math.hypot(translation.x, translation.y) >= RECOGNITION_DISTANCE;
         transition(next);
       }
 
@@ -208,6 +244,12 @@ const UIPanGestureRecognizerRoot = forwardRef<HTMLDivElement, UIPanGestureRecogn
       }
 
       const handleTouchMove = (event: TouchEvent) => {
+        const touch = event.touches[0];
+
+        if (stateRef.current === 'possible' && touch && event.cancelable) {
+          recognizeTouchRef.current({ x: touch.clientX, y: touch.clientY }, event.timeStamp);
+        }
+
         if (isActiveState(stateRef.current) && event.cancelable) {
           event.preventDefault();
         }
@@ -251,29 +293,19 @@ const UIPanGestureRecognizerRoot = forwardRef<HTMLDivElement, UIPanGestureRecogn
         return;
       }
 
-      appendSample(event);
+      appendSample({ x: event.clientX, y: event.clientY }, event.timeStamp);
 
       if (stateRef.current === 'failed') {
         return;
       }
 
       if (stateRef.current === 'possible') {
-        const translation = gestureRecognizer.translation();
+        const recognitionDistance = event.pointerType === 'touch' ? 0 : RECOGNITION_DISTANCE;
 
-        if (Math.hypot(translation.x, translation.y) < RECOGNITION_DISTANCE) {
-          return;
+        if (recognize(recognitionDistance) === 'began' && event.pointerType !== 'touch') {
+          event.currentTarget.setPointerCapture(event.pointerId);
         }
 
-        const shouldBegin =
-          handlersRef.current.delegate?.gestureRecognizerShouldBegin?.(gestureRecognizer) ?? true;
-
-        if (!shouldBegin) {
-          transition('failed');
-          return;
-        }
-
-        event.currentTarget.setPointerCapture(event.pointerId);
-        transition('began');
         return;
       }
 
@@ -282,7 +314,7 @@ const UIPanGestureRecognizerRoot = forwardRef<HTMLDivElement, UIPanGestureRecogn
 
     const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
       onPointerUp?.(event);
-      appendSample(event);
+      appendSample({ x: event.clientX, y: event.clientY }, event.timeStamp);
       finish(event, 'ended');
     };
 

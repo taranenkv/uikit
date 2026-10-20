@@ -1,4 +1,5 @@
-import { useRef } from 'react';
+import { useState } from 'react';
+import gsap from 'gsap';
 import { UIPanGestureRecognizer } from '../../../uikit/UIPanGestureRecognizer/UIPanGestureRecognizer';
 import { UIViewController } from '../../../uikit/UIViewController/UIViewController';
 import { useUIViewControllerContext } from '../../../uikit/UIViewController/UIViewController.context';
@@ -9,22 +10,24 @@ import type {
 } from '../../../uikit/UIPanGestureRecognizer/UIPanGestureRecognizer.types';
 import {
   COURSE_TRANSITION_CONTENT_ATTRIBUTE,
+  COURSE_TRANSITION_INTERACTIVE_VIEW_ATTRIBUTE,
   COURSE_TRANSITION_SCROLL_VIEW_ATTRIBUTE,
   courseTransitionIdentifier,
-  type CourseZoomTransition,
 } from '../CourseZoomTransition/CourseZoomTransition';
-import { courseColorStyle, type Course } from '../Courses.data';
+import { COURSE_CARD_ASPECT_RATIO, courseColorStyle, type Course } from '../Courses.data';
 import styles from './CourseViewController.module.css';
 
-const DISMISSAL_DISTANCE_FACTOR = 0.6;
-const DISMISSAL_PERCENT_THRESHOLD = 0.3;
-const DISMISSAL_VELOCITY_THRESHOLD = 600;
+const INTERACTIVE_DISMISSAL_DISTANCE = 320;
+const MAXIMUM_SCALE_REDUCTION = 0.2;
+const INTERACTIVE_CORNER_RADIUS = 30;
+const DISMISSAL_PROGRESS_THRESHOLD = 0.35;
+const DISMISSAL_VELOCITY_THRESHOLD = 700;
+const RESTORATION_DURATION = 0.45;
 
 const MatchedTransitionSource = UIViewControllerTransitioningDelegate.MatchedTransitionSource;
 
 interface CourseViewControllerProps {
   course: Course;
-  transition: CourseZoomTransition;
 }
 
 interface CourseArtworkProps {
@@ -42,53 +45,62 @@ export function CourseArtwork({ course }: CourseArtworkProps) {
   );
 }
 
-function CourseContent({ course, transition }: CourseViewControllerProps) {
+function CourseContent({ course }: CourseViewControllerProps) {
   const { appearanceState, dismiss } = useUIViewControllerContext();
-  const scrollViewRef = useRef<HTMLDivElement>(null);
-  const interactionController = transition.interactionController;
+  const [interactiveView, setInteractiveView] = useState<HTMLDivElement | null>(null);
+  const [scrollView, setScrollView] = useState<HTMLDivElement | null>(null);
 
   const gestureDelegate: UIGestureRecognizerDelegate = {
     gestureRecognizerShouldBegin: (gestureRecognizer) => {
       const translation = gestureRecognizer.translation();
-      const scrollTop = scrollViewRef.current?.scrollTop ?? 0;
+      const scrollTop = scrollView?.scrollTop ?? 0;
 
       return (
         appearanceState === 'appeared' &&
         scrollTop <= 0 &&
         translation.y > 0 &&
-        translation.y > Math.abs(translation.x)
+        translation.y >= Math.abs(translation.x)
       );
     },
   };
 
+  const restoreInteractiveView = () => {
+    gsap.to(interactiveView, {
+      scale: 1,
+      borderRadius: 0,
+      duration: RESTORATION_DURATION,
+      ease: 'power3.out',
+      overwrite: 'auto',
+    });
+  };
+
   const handlePan = (gestureRecognizer: UIPanGestureRecognizerProtocol) => {
-    const height = gestureRecognizer.view?.clientHeight || window.innerHeight;
-    const percentComplete =
-      gestureRecognizer.translation().y / (height * DISMISSAL_DISTANCE_FACTOR);
+    const progress = Math.min(
+      Math.max(gestureRecognizer.translation().y / INTERACTIVE_DISMISSAL_DISTANCE, 0),
+      1
+    );
 
     switch (gestureRecognizer.state) {
       case 'began':
-        transition.beginInteractiveDismissal();
-        dismiss(true);
-        break;
       case 'changed':
-        interactionController.update(percentComplete);
+        gsap.set(interactiveView, {
+          scale: 1 - MAXIMUM_SCALE_REDUCTION * progress,
+          borderRadius: INTERACTIVE_CORNER_RADIUS * Math.min(progress * 4, 1),
+          overwrite: 'auto',
+        });
         break;
       case 'ended':
         if (
-          percentComplete > DISMISSAL_PERCENT_THRESHOLD ||
+          progress > DISMISSAL_PROGRESS_THRESHOLD ||
           gestureRecognizer.velocity().y > DISMISSAL_VELOCITY_THRESHOLD
         ) {
-          interactionController.finish();
+          dismiss(true);
         } else {
-          interactionController.cancel();
+          restoreInteractiveView();
         }
-
-        transition.endInteractiveDismissal();
         break;
       case 'cancelled':
-        interactionController.cancel();
-        transition.endInteractiveDismissal();
+        restoreInteractiveView();
         break;
       default:
         break;
@@ -97,18 +109,22 @@ function CourseContent({ course, transition }: CourseViewControllerProps) {
 
   const contentProps = { [COURSE_TRANSITION_CONTENT_ATTRIBUTE]: '' };
   const scrollViewProps = { [COURSE_TRANSITION_SCROLL_VIEW_ATTRIBUTE]: '' };
+  const interactiveViewProps = { [COURSE_TRANSITION_INTERACTIVE_VIEW_ATTRIBUTE]: '' };
 
   return (
-    <>
+    <div ref={setInteractiveView} className={styles.interactiveView} {...interactiveViewProps}>
       <UIPanGestureRecognizer
         className={styles.panGestureRecognizer}
         action={handlePan}
         delegate={gestureDelegate}>
-        <div ref={scrollViewRef} className={styles.scrollView} {...scrollViewProps}>
+        <div ref={setScrollView} className={styles.scrollView} {...scrollViewProps}>
           <MatchedTransitionSource
             identifier={courseTransitionIdentifier(course.id, 'card')}
             className={styles.header}
-            style={courseColorStyle(course)}>
+            style={{
+              ...courseColorStyle(course),
+              aspectRatio: `1 / ${COURSE_CARD_ASPECT_RATIO}`,
+            }}>
             <MatchedTransitionSource
               identifier={courseTransitionIdentifier(course.id, 'artwork')}
               className={styles.headerArtwork}>
@@ -158,17 +174,17 @@ function CourseContent({ course, transition }: CourseViewControllerProps) {
         {...contentProps}>
         ×
       </button>
-    </>
+    </div>
   );
 }
 
-export function CourseViewController({ course, transition }: CourseViewControllerProps) {
+export function CourseViewController({ course }: CourseViewControllerProps) {
   return (
     <UIViewController
       title={course.title}
       modalPresentationStyle='custom'
       className={styles.courseViewController}>
-      <CourseContent course={course} transition={transition} />
+      <CourseContent course={course} />
     </UIViewController>
   );
 }
